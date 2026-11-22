@@ -361,6 +361,11 @@ function renderSettings() {
       <p>${companion ? `✓ Detected in this browser (v${esc(companion)}).` : '✗ Not detected in this browser.'}</p>
       <p class="muted small">The companion userscript runs on the game sites, notices when you finish a daily and logs it automatically. Install it with Violentmonkey or Tampermonkey (desktop) or the Userscripts app (iPhone/iPad Safari), then reload this page once to link it.</p>
       <p><a class="btn" href="${esc(companionUrl)}">Install companion script</a></p>
+      <p class="muted small">If the browser says scripts “cannot be added from this website”, open Violentmonkey → <strong>＋ → Install from URL</strong> (Tampermonkey: <strong>Utilities → Import from URL</strong>) and paste:</p>
+      <div class="mark">
+        <input type="text" readonly value="${esc(companionUrl)}" aria-label="Companion script URL" />
+        <button class="btn" type="button" data-act="copy-companion" data-url="${esc(companionUrl)}">Copy</button>
+      </div>
     </section>
     <section class="panel">
       <h2>Games</h2>
@@ -470,6 +475,11 @@ view.addEventListener('click', (ev) => {
       if (g.order !== k) next = upsertGame(next, { ...g, order: k });
     });
     persist(next);
+  } else if (act === 'copy-companion') {
+    navigator.clipboard?.writeText(el.dataset.url).then(
+      () => (el.textContent = 'Copied ✓'),
+      () => el.previousElementSibling?.select(),
+    );
   } else if (act === 'export') {
     const blob = new Blob([JSON.stringify(canonical(data), null, 2)], { type: 'application/json' });
     const a = document.createElement('a');

@@ -49,6 +49,7 @@ Do this once in every browser you use: Helium on desktop, and Safari on iPhone/i
 1. Install **Violentmonkey** (or Tampermonkey) from the Chrome Web Store.
    - Tampermonkey on Chromium also needs: `chrome://extensions` → Tampermonkey → **Details** → turn on **Allow User Scripts**.
 2. In the tracker, go to **Settings → Install companion script**. The extension opens an install page; click **Install**.
+   - If Chrome/Helium says **"Apps, extensions, and user scripts cannot be added from this website"**, the manager didn't catch the link. Copy the script URL from Settings (`https://<you>.github.io/dailies-tracker/userscript/dailies-companion.user.js`) and paste it into Violentmonkey → **＋ → Install from URL** (Tampermonkey: **Dashboard → Utilities → Import from URL**).
 3. Reload the tracker and accept the "Link Dailies Companion to the tracker at …" prompt. Settings now shows **✓ Detected in this browser**.
 
 **iPhone / iPad (Safari)**
