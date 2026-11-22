@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https://api.github.com https://raw.githubusercontent.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'" />
+    <meta name="dailies-tracker" content="1" />
+    <title>Dailies</title>
+    <meta name="theme-color" content="#14161c" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Dailies" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="js/app.js"></script>
+  </head>
+  <body>
+    <header class="top">
+      <h1><a href="#today">Dailies</a></h1>
+      <button id="sync-status" class="sync" type="button" title="Sync now">…</button>
+    </header>
+    <main id="view" aria-live="polite"></main>
+    <nav class="tabs">
+      <a href="#today" data-tab="today">Today</a>
+      <a href="#stats" data-tab="stats">Stats</a>
+      <a href="#settings" data-tab="settings">Settings</a>
+    </nav>
+    <dialog id="day-dialog">
+      <form method="dialog" id="day-form">
+        <h2 id="day-title">Edit day</h2>
+        <label class="row"><input type="checkbox" name="done" /> Done</label>
+        <label>Score <input type="number" name="score" step="any" inputmode="decimal" /></label>
+        <div class="actions">
+          <button value="cancel" type="submit" class="btn">Cancel</button>
+          <button value="save" type="submit" class="btn primary">Save</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>
