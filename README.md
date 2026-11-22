@@ -59,7 +59,7 @@ Do this once in every browser you use: Helium on desktop, and Safari on iPhone/i
 4. Reload the tracker in Safari and accept the link prompt.
 5. Play the games **in Safari**. Other iOS browsers can't run userscripts.
 
-> **iOS home-screen app:** if you "Add to Home Screen", that app has its own storage separate from Safari, so enter the GitHub settings there too. The companion script only runs in Safari tabs, so play the games in Safari. The tracker itself can be the home-screen app.
+> **iOS home-screen app:** in Safari, open the tracker → **Share** (□↑) → **Add to Home Screen** → **Add**. That app has its own storage separate from Safari, so enter the GitHub settings there too. The companion only runs in real Safari tabs. If **Play** opens the game in the home-screen app's built-in browser (no Safari address bar), tap the compass/Safari button to move it to Safari, or open the games from Safari directly. Otherwise auto-logging won't see them.
 
 ---
 
@@ -126,11 +126,20 @@ To auto-detect a new game, add a detector to [userscript/dailies-companion.user.
 - **⚠ Sync error / Token rejected:** the token expired or was revoked. Create a new one and enter it in Settings (the companion picks it up the next time you open the tracker).
 - **A game stopped auto-logging:** the game probably changed how it stores results. Use Mark done and update the detector.
 
+## Reminders (ntfy)
+A GitHub Actions workflow in the **private data repo** runs at **8:30 AM and 8:30 PM Pacific**. It reads `data.json` and, only if a game isn't done yet today, sends a push notification through [ntfy](https://ntfy.sh). The notification lists what's left, shows any streak at risk, and has **Play** buttons. Tapping the notification opens the tracker. Nothing is sent once everything is done.
+
+Setup:
+1. Pick a hard-to-guess topic name, e.g. `dailies-<random letters>`. Anyone who knows it can read and post to it, so treat it like a password.
+2. Install the **ntfy** app (App Store) on your iPhone/iPad, tap **＋**, and subscribe to that topic on `ntfy.sh`. Allow notifications.
+3. In the data repo: **Settings → Secrets and variables → Actions → New repository secret**, name `NTFY_TOPIC`, value = your topic.
+4. Copy [reminders/reminders.yml](reminders/reminders.yml) to `.github/workflows/reminders.yml` in the data repo.
+5. Test it: data repo → **Actions → Daily reminders → Run workflow**. With "test" ticked, it always sends.
+
+To change the times or timezone, edit the `cron`/`timezone` lines and `REMINDER_TZ` in the workflow. GitHub can start scheduled runs a few minutes late. Runs delayed past the right part of the day (e.g. the evening one after midnight) are skipped.
+
 ## Development
 ```powershell
 npm test                     # unit tests (Node 20+, no dependencies)
 python -m http.server 8000   # then open http://localhost:8000
 ```
-
-## Roadmap
-- **V2 – Reminders via [ntfy](https://ntfy.sh):** a scheduled GitHub Actions workflow in the private repo reads `data.json` in the evening and, if a game isn't done today, sends a push to a secret ntfy topic you subscribe to in the ntfy iOS app.

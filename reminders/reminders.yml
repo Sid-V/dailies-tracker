@@ -1,0 +1,50 @@
+# Copy this file to .github/workflows/reminders.yml in your PRIVATE data repo (e.g. dailies-data).
+# Required secret in that repo: NTFY_TOPIC (your secret ntfy topic name). Optional: NTFY_TOKEN.
+name: Daily reminders
+
+on:
+  schedule:
+    - cron: '30 8 * * *'
+      timezone: 'America/Los_Angeles'
+    - cron: '30 20 * * *'
+      timezone: 'America/Los_Angeles'
+  workflow_dispatch:
+    inputs:
+      test:
+        description: Send a test notification even if everything is done
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reminders
+  cancel-in-progress: false
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out data
+        uses: actions/checkout@v5
+        with:
+          path: data
+
+      - name: Check out tracker (reminder script)
+        uses: actions/checkout@v5
+        with:
+          repository: Sid-V/dailies-tracker
+          path: tracker
+
+      - name: Send reminder if anything is left
+        run: node tracker/reminders/remind.js
+        env:
+          DATA_FILE: data/data.json
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+          REMINDER_TZ: America/Los_Angeles
+          TRACKER_URL: https://sid-v.github.io/dailies-tracker/
+          SCHEDULE: ${{ github.event.schedule }}
+          TEST: ${{ inputs.test }}
