@@ -14,26 +14,45 @@ export function localParts(now, tz) {
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
+      second: '2-digit',
       hourCycle: 'h23',
     })
       .formatToParts(now)
       .map((p) => [p.type, p.value]),
   );
-  return { day: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour), minute: Number(parts.minute) };
+  return {
+    day: `${parts.year}-${parts.month}-${parts.day}`,
+    hour: Number(parts.hour),
+    minute: Number(parts.minute),
+    second: Number(parts.second),
+  };
 }
 
-// The workflow passes the cron line that fired; fall back to the local hour for manual runs.
-export function slotFor(schedule, hour) {
-  const m = /^\s*\S+\s+(\d+)\s/.exec(schedule || '');
-  const h = m ? Number(m[1]) : hour;
-  return h < 15 ? 'morning' : 'evening';
+// GitHub's scheduler can run hours late, so the workflow polls often and the script decides
+// whether we're inside a reminder window. Each slot fires at most once (see alreadySent).
+export const SLOTS = {
+  morning: { start: 8 * 60 + 30, end: 15 * 60 },
+  evening: { start: 20 * 60 + 30, end: 24 * 60 },
+};
+
+export function currentSlot(now, tz) {
+  const { hour, minute } = localParts(now, tz);
+  const m = hour * 60 + minute;
+  for (const [name, w] of Object.entries(SLOTS)) if (m >= w.start && m < w.end) return name;
+  return null;
 }
 
-export function buildReminder(data, { now = new Date(), tz, trackerUrl, schedule, test = false }) {
-  const { day, hour } = localParts(now, tz);
-  const slot = slotFor(schedule, hour);
-  // A badly delayed run shouldn't nag about the wrong part of the day (or the next day).
-  if (!test && schedule && (slot === 'evening' ? hour < 15 : hour >= 15)) return null;
+export function slotStartEpoch(now, tz, slot) {
+  const { hour, minute, second } = localParts(now, tz);
+  const sinceStartSec = (hour * 60 + minute - SLOTS[slot].start) * 60 + second;
+  return Math.floor(now.getTime() / 1000) - sinceStartSec;
+}
+
+const TEST_TITLE = 'Dailies reminders are working ✅';
+
+export function buildReminder(data, { now = new Date(), tz, trackerUrl, slot, test = false }) {
+  const { day } = localParts(now, tz);
+  if (!test && !slot) return null;
 
   const d = withDefaults(normalize(data));
   const pending = activeGames(d)
@@ -50,7 +69,7 @@ export function buildReminder(data, { now = new Date(), tz, trackerUrl, schedule
   if (test) {
     return {
       ...msg,
-      title: 'Dailies reminders are working ✅',
+      title: TEST_TITLE,
       message: pending.length ? `Still to play today:\n${lines.join('\n')}` : 'Everything is done today. Nice!',
       tags: ['white_check_mark'],
       priority: 3,
@@ -74,41 +93,64 @@ export function buildReminder(data, { now = new Date(), tz, trackerUrl, schedule
   };
 }
 
-export async function sendNtfy(msg, { server = 'https://ntfy.sh', topic, token, fetchImpl = fetch }) {
-  const res = await fetchImpl(server.replace(/\/+$/, '') + '/', {
+const ntfyBase = (server) => (server || 'https://ntfy.sh').replace(/\/+$/, '');
+const authHeader = (token) => (token ? { Authorization: `Bearer ${token}` } : {});
+
+export async function sendNtfy(msg, { server, topic, token, fetchImpl = fetch }) {
+  const res = await fetchImpl(ntfyBase(server) + '/', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    headers: { 'Content-Type': 'application/json', ...authHeader(token) },
     body: JSON.stringify({ topic, ...msg }),
   });
   if (!res.ok) throw new Error(`ntfy responded ${res.status}: ${await res.text()}`);
 }
 
-async function main(env = process.env) {
+// The topic doubles as our "already sent" log, so no state needs committing anywhere.
+export async function alreadySent({ server, topic, token, since, fetchImpl = fetch }) {
+  const url = `${ntfyBase(server)}/${encodeURIComponent(topic)}/json?poll=1&since=${since}`;
+  const res = await fetchImpl(url, { headers: authHeader(token) });
+  if (!res.ok) throw new Error(`ntfy poll responded ${res.status}: ${await res.text()}`);
+  return (await res.text())
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
+    .some((m) => m.event === 'message' && m.title !== TEST_TITLE);
+}
+
+export async function run(env = process.env, { now = new Date(), fetchImpl = fetch, log = console.log } = {}) {
   const topic = env.NTFY_TOPIC;
   if (!topic) throw new Error('NTFY_TOPIC is not set (add it as a repository secret).');
   const tz = env.REMINDER_TZ || 'America/Los_Angeles';
+  const test = env.TEST === 'true';
+  const slot = currentSlot(now, tz);
+  if (!test && !slot) {
+    const { hour, minute } = localParts(now, tz);
+    log(`Outside reminder windows (${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${tz}).`);
+    return null;
+  }
   let data = {};
   try {
     data = JSON.parse(await readFile(env.DATA_FILE || 'data.json', 'utf8'));
   } catch (err) {
     if (err.code !== 'ENOENT') throw err;
   }
-  const msg = buildReminder(data, {
-    tz,
-    trackerUrl: env.TRACKER_URL,
-    schedule: env.SCHEDULE,
-    test: env.TEST === 'true',
-  });
+  const msg = buildReminder(data, { now, tz, trackerUrl: env.TRACKER_URL, slot, test });
   if (!msg) {
-    console.log('Nothing to remind about.');
-    return;
+    log(`Nothing to remind about (${slot}).`);
+    return null;
   }
-  await sendNtfy(msg, { server: env.NTFY_SERVER || undefined, topic, token: env.NTFY_TOKEN || undefined });
-  console.log(`Sent: ${msg.title}`);
+  const ntfy = { server: env.NTFY_SERVER || undefined, topic, token: env.NTFY_TOKEN || undefined, fetchImpl };
+  if (!test && (await alreadySent({ ...ntfy, since: slotStartEpoch(now, tz, slot) }))) {
+    log(`The ${slot} reminder was already sent today.`);
+    return null;
+  }
+  await sendNtfy(msg, ntfy);
+  log(`Sent (${test ? 'test' : slot}): ${msg.title}`);
+  return msg;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((err) => {
+  run().catch((err) => {
     console.error(err.message);
     process.exit(1);
   });

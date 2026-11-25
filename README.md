@@ -127,7 +127,9 @@ To auto-detect a new game, add a detector to [userscript/dailies-companion.user.
 - **A game stopped auto-logging:** the game probably changed how it stores results. Use Mark done and update the detector.
 
 ## Reminders (ntfy)
-A GitHub Actions workflow in the **private data repo** runs at **8:30 AM and 8:30 PM Pacific**. It reads `data.json` and, only if a game isn't done yet today, sends a push notification through [ntfy](https://ntfy.sh). The notification lists what's left, shows any streak at risk, and has **Play** buttons. Tapping the notification opens the tracker. Nothing is sent once everything is done.
+A GitHub Actions workflow in the **private data repo** reminds you at **8:30 AM and 8:30 PM Pacific**. If a game isn't done yet today, it sends a push notification through [ntfy](https://ntfy.sh). The notification lists what's left, shows any streak at risk, and has **Play** buttons. Tapping it opens the tracker. Nothing is sent once everything is done.
+
+GitHub's scheduler often runs cron jobs late, sometimes by hours. So the workflow checks every 15 minutes around each window, and the script sends **at most one reminder per window**: the first check after 8:30 AM (until 3 PM) and after 8:30 PM (until midnight). It knows a reminder already went out by looking at the ntfy topic's recent messages, so nothing has to be saved anywhere. That's about 40 short runs a day, roughly 1,200 of the 2,000 free Actions minutes a month for private repos.
 
 Setup:
 1. Pick a hard-to-guess topic name, e.g. `dailies-<random letters>`. Anyone who knows it can read and post to it, so treat it like a password.
@@ -136,7 +138,7 @@ Setup:
 4. Copy [reminders/reminders.yml](reminders/reminders.yml) to `.github/workflows/reminders.yml` in the data repo.
 5. Test it: data repo → **Actions → Daily reminders → Run workflow**. With "test" ticked, it always sends.
 
-To change the times or timezone, edit the `cron`/`timezone` lines and `REMINDER_TZ` in the workflow. GitHub can start scheduled runs a few minutes late. Runs delayed past the right part of the day (e.g. the evening one after midnight) are skipped.
+To change the times, edit `SLOTS` in [reminders/remind.js](reminders/remind.js) and make sure the workflow's UTC `cron` hours cover the new windows in both standard and daylight time. To change the time zone, edit `REMINDER_TZ` in the workflow (and the cron hours to match).
 
 ## Development
 ```powershell
