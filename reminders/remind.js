@@ -56,7 +56,7 @@ export function buildReminder(data, { now = new Date(), tz, trackerUrl, slot, te
 
   const d = withDefaults(normalize(data));
   const pending = activeGames(d)
-    .filter((g) => !findEntry(d, g.id, day))
+    .filter((g) => (!g.addedOn || g.addedOn <= day) && !findEntry(d, g.id, day))
     .map((g) => ({ game: g, streak: gameStats(d, g.id, day).current }));
 
   if (!pending.length && !test) return null;

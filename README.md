@@ -1,6 +1,6 @@
 # Dailies Tracker
 
-A tiny personal tracker for daily web games: [Catfishing](https://catfishing.net/) and [Farflung](https://farflung.game/) to start, plus any other game you add. It shows today's games with Play links, logs when you finish (automatically, through a companion userscript), and keeps your streaks, scores and history in sync across desktop, iPhone and iPad.
+A tiny personal tracker for daily web games: [Catfishing](https://catfishing.net/) and [Farflung](https://farflung.game/) to start, plus a plain check-off item for the [LeetCode daily](https://leetcode.com/problemset/) and any other game you add. It shows today's games with Play links, logs when you finish (automatically, through a companion userscript), and keeps your streaks, scores and history in sync across desktop, iPhone and iPad.
 
 - **No framework, no build step:** plain HTML/CSS/JS served by GitHub Pages.
 - **Your data:** one `data.json` in a **private** GitHub repo that you own.
@@ -88,6 +88,8 @@ The companion never overwrites a day you edited or cleared by hand.
 
 ## Adding another game
 **Settings → Games → ＋ Add a game**: name, URL, emoji, score label and max (e.g. `correct` out of `10`). It appears on Today with manual **Mark done**.
+
+For habits with no score (like the built-in **LeetCode daily**), tick **Done / not done only (no score)**. The card's **Mark done** then checks it off in one tap, the score fields and stats are hidden, and it counts toward the all-dailies streak and reminders from the day it was added.
 
 To auto-detect a new game, add a detector to [userscript/dailies-companion.user.js](userscript/dailies-companion.user.js):
 1. Add its domain to the `// @match` lines.

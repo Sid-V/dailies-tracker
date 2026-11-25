@@ -171,7 +171,7 @@ test('companion: uploads to GitHub, retrying on conflict', async () => {
   const saved = gh.json();
   assert.equal(findEntry(saved, 'catfishing', '2026-11-21').score, 3);
   assert.equal(findEntry(saved, 'farflung', '2026-11-21').score, 99, 'other device’s write preserved');
-  assert.equal(saved.games.length, 2, 'games written by the tracker are untouched');
+  assert.equal(saved.games.length, 3, 'games written by the tracker are untouched');
 
   const again = await us.uploadDetected(client, [{ gameId: 'catfishing', day: '2026-11-21', score: 3 }]);
   assert.equal(again.length, 0);

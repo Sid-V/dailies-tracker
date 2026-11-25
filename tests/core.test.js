@@ -6,6 +6,7 @@ import {
   activeGames,
   findEntry,
   formatScore,
+  hasScore,
   merge,
   removeEntry,
   sameData,
@@ -30,9 +31,11 @@ test('dates: addDays/diffDays across month, year and DST boundaries', () => {
 
 test('model: defaults are seeded once and are archivable', () => {
   const d = withDefaults(emptyData());
-  assert.deepEqual(d.games.map((g) => g.id), ['catfishing', 'farflung']);
+  assert.deepEqual(d.games.map((g) => g.id), ['catfishing', 'farflung', 'leetcode']);
   const archived = upsertGame(d, { ...d.games[0], archived: true });
-  assert.deepEqual(activeGames(withDefaults(archived)).map((g) => g.id), ['farflung']);
+  assert.deepEqual(activeGames(withDefaults(archived)).map((g) => g.id), ['farflung', 'leetcode']);
+  assert.equal(hasScore(d.games.find((g) => g.id === 'leetcode')), false);
+  assert.equal(hasScore(d.games[0]), true);
 });
 
 test('model: merge keeps newest version per entry and honours tombstones', () => {
@@ -62,7 +65,7 @@ test('model: upsertGame creates unique ids and appends order', () => {
   d = upsertGame(d, { name: 'Far Flung', url: 'https://y.test' });
   const ids = d.games.map((g) => g.id);
   assert.ok(ids.includes('far-flung') && ids.includes('far-flung-2'));
-  assert.equal(d.games.at(-1).order, 3);
+  assert.equal(d.games.at(-1).order, 4);
 });
 
 test('model: tombstone wins a timestamp tie; slow clocks still overwrite', () => {
@@ -133,7 +136,23 @@ test('stats: all-dailies streak requires every active game', () => {
   for (const day of ['2026-11-19', '2026-11-20', '2026-11-21']) d = setEntry(d, { gameId: 'catfishing', day });
   for (const day of ['2026-11-20', '2026-11-21']) d = setEntry(d, { gameId: 'farflung', day });
   const o = overallStats(d, '2026-11-21');
-  assert.deepEqual([o.allCurrent, o.allLongest, o.doneToday, o.gameCount, o.daysPlayed], [2, 2, 2, 2, 3]);
+  assert.deepEqual([o.allCurrent, o.allLongest, o.doneToday, o.gameCount, o.daysPlayed], [2, 2, 2, 3, 3]);
+});
+
+test('stats: LeetCode (no score) counts toward the all-dailies streak from the day it was added', () => {
+  let d = withDefaults(emptyData());
+  for (const day of ['2026-11-22', '2026-11-23', '2026-11-24']) {
+    d = setEntry(d, { gameId: 'catfishing', day, score: 5 });
+    d = setEntry(d, { gameId: 'farflung', day, score: 300 });
+  }
+  let o = overallStats(d, '2026-11-24');
+  assert.equal(o.allCurrent, 2, 'today needs LeetCode too');
+  assert.equal(o.allAtRisk, true);
+  d = setEntry(d, { gameId: 'leetcode', day: '2026-11-24' });
+  o = overallStats(d, '2026-11-24');
+  assert.deepEqual([o.allCurrent, o.allAtRisk], [3, false]);
+  assert.equal(findEntry(d, 'leetcode', '2026-11-24').score, null);
+  assert.equal(gameStats(d, 'leetcode', '2026-11-24').current, 1);
 });
 
 test('stats: adding a game does not reset the all-dailies streak', () => {

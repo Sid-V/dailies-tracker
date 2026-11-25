@@ -69,6 +69,17 @@ test('remind: evening only nags about what is left, and stays quiet when all don
   assert.match(buildReminder(d, { now: evening, tz, test: true }).message, /Everything is done/);
 });
 
+test('remind: LeetCode is included from the day it was added', () => {
+  const day = '2026-11-25';
+  let d = withDefaults(emptyData());
+  d = setEntry(d, { gameId: 'catfishing', day, score: 3 });
+  d = setEntry(d, { gameId: 'farflung', day, score: 300 });
+  const msg = buildReminder(d, { now: pst(day, '20:30'), tz, slot: 'evening' });
+  assert.equal(msg.title, 'Still to play: LeetCode daily');
+  d = setEntry(d, { gameId: 'leetcode', day });
+  assert.equal(buildReminder(d, { now: pst(day, '20:30'), tz, slot: 'evening' }), null);
+});
+
 test('remind: archived games are ignored', () => {
   const d = withDefaults(emptyData());
   d.games = d.games.map((g) => (g.id === 'farflung' ? { ...g, archived: true } : g));

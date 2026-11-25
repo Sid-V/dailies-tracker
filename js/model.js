@@ -27,7 +27,22 @@ export const DEFAULT_GAMES = [
     archived: false,
     updatedAt: EPOCH,
   },
+  {
+    id: 'leetcode',
+    name: 'LeetCode daily',
+    url: 'https://leetcode.com/problemset/',
+    emoji: '💻',
+    score: null,
+    detector: null,
+    order: 2,
+    archived: false,
+    addedOn: '2026-11-24',
+    updatedAt: EPOCH,
+  },
 ];
+
+// `score: null` marks a plain done / not-done item.
+export const hasScore = (game) => !!game && game.score !== null && game.score !== false;
 
 export const DETECTORS = ['catfishing', 'farflung'];
 

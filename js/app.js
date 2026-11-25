@@ -6,6 +6,7 @@ import {
   emptyData,
   findEntry,
   formatScore,
+  hasScore,
   merge,
   normalize,
   removeEntry,
@@ -196,10 +197,16 @@ function renderToday(t) {
         : `<span class="status todo">${s.atRisk ? 'Streak at risk' : 'Not done yet'}</span>`;
       const markForm =
         markingGame === g.id && !e
-          ? `<form class="mark" data-mark-form="${esc(g.id)}">
+          ? hasScore(g)
+            ? `<form class="mark" data-mark-form="${esc(g.id)}">
                <input type="number" name="score" step="any" inputmode="decimal" placeholder="Score${g.score?.max ? ` (of ${esc(g.score.max)})` : ''} – optional" />
                <button class="btn primary" type="submit">Save</button>
                <button class="btn" type="button" data-act="cancel-mark">Cancel</button>
+             </form>`
+            : `<form class="mark" data-mark-form="${esc(g.id)}">
+               <span class="muted">Finished ${esc(g.name)}?</span>
+               <button class="btn primary" type="submit">Yes, mark done</button>
+               <button class="btn" type="button" data-act="cancel-mark">Not yet</button>
              </form>`
           : '';
       return `<li class="card ${e ? 'is-done' : ''}">
@@ -210,7 +217,7 @@ function renderToday(t) {
           </div>
           <div class="card-body">${status}</div>
           <div class="card-actions">
-            <a class="btn primary" href="${esc(safeUrl(g.url))}" target="_blank" rel="noopener noreferrer" data-act="play" data-game="${esc(g.id)}">Play ↗</a>
+            <a class="btn primary" href="${esc(safeUrl(g.url))}" target="_blank" rel="noopener noreferrer" data-act="play" data-game="${esc(g.id)}">${hasScore(g) ? 'Play' : 'Open'} ↗</a>
             ${e ? (e.source === 'manual' ? `<button class="btn" data-act="undo" data-game="${esc(g.id)}">Undo</button>` : '') : `<button class="btn" data-act="mark" data-game="${esc(g.id)}">Mark done</button>`}
           </div>
           ${markForm}
@@ -299,8 +306,8 @@ function renderGame(id, t) {
         ${tile('Current streak', s.current)}
         ${tile('Longest streak', s.longest)}
         ${tile('Days played', s.total)}
-        ${tile(`Average ${g.score?.label || 'score'}`, fmtNum(s.average))}
-        ${tile(`Best ${g.score?.label || 'score'}`, fmtNum(s.best))}
+        ${hasScore(g) ? tile(`Average ${g.score?.label || 'score'}`, fmtNum(s.average)) : ''}
+        ${hasScore(g) ? tile(`Best ${g.score?.label || 'score'}`, fmtNum(s.best)) : ''}
         ${tile('Since', s.firstDay ? formatDay(s.firstDay, { month: 'short', day: 'numeric', year: 'numeric' }) : '–')}
       </div>
     </section>
@@ -392,6 +399,7 @@ const gameFields = (g, detectorOpts) => `
   <label>Name <input name="name" required value="${esc(g.name)}" /></label>
   <label>URL <input name="url" type="url" required value="${esc(g.url)}" placeholder="https://…" /></label>
   <label>Emoji <input name="emoji" maxlength="8" value="${esc(g.emoji || '')}" placeholder="🎮" /></label>
+  <label class="row"><input type="checkbox" name="noscore"${g.id && !hasScore(g) ? ' checked' : ''} /> Done / not done only (no score)</label>
   <label>Score label <input name="label" value="${esc(g.score?.label || '')}" placeholder="pts" /></label>
   <label>Score max <input name="max" type="number" step="any" value="${esc(g.score?.max ?? '')}" placeholder="(none)" /></label>
   <label>Auto-detect <select name="detector">${detectorOpts(g.detector)}</select></label>`;
@@ -404,6 +412,7 @@ function openDayDialog(gameId, day) {
   document.getElementById('day-title').textContent = `${g?.name || gameId} – ${formatDay(day, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}`;
   dayForm.elements.done.checked = !!e;
   dayForm.elements.score.value = e?.score ?? '';
+  dayForm.elements.score.closest('label').hidden = !hasScore(g);
   dayForm.dataset.game = gameId;
   dayForm.dataset.day = day;
   dayDialog.returnValue = '';
@@ -446,6 +455,11 @@ view.addEventListener('click', (ev) => {
   if (act === 'import') return;
   ev.preventDefault();
   if (act === 'mark') {
+    const game = canonical(data).games.find((g) => g.id === el.dataset.game);
+    if (game && !hasScore(game)) {
+      persist(setEntry(data, { gameId: game.id, day: t, source: 'manual' }));
+      return;
+    }
     markingGame = el.dataset.game;
     render();
     view.querySelector(`[data-mark-form="${CSS.escape(markingGame)}"] input`)?.focus();
@@ -508,7 +522,7 @@ view.addEventListener('submit', async (ev) => {
   if (form.dataset.markForm) {
     const gameId = form.dataset.markForm;
     markingGame = null;
-    persist(setEntry(data, { gameId, day: today(), score: parseScore(form.elements.score.value), source: 'manual' }));
+    persist(setEntry(data, { gameId, day: today(), score: parseScore(form.elements.score?.value), source: 'manual' }));
     return;
   }
   if (form.dataset.form === 'game') {
@@ -523,7 +537,7 @@ view.addEventListener('submit', async (ev) => {
       name: f.name.value.trim(),
       url,
       emoji: f.emoji.value.trim(),
-      score: { label: f.label.value.trim(), max: parseScore(f.max.value) },
+      score: f.noscore.checked ? null : { label: f.label.value.trim(), max: parseScore(f.max.value) },
       detector: f.detector.value || null,
       archived: f.archived ? f.archived.checked : false,
     };
@@ -563,6 +577,7 @@ view.addEventListener('submit', async (ev) => {
 syncBtn.addEventListener('click', () => (config ? runSync() : (location.hash = '#settings')));
 window.addEventListener('hashchange', () => {
   markingGame = null;
+  if (dayDialog.open) dayDialog.close('cancel');
   render();
   window.scrollTo(0, 0);
 });
