@@ -131,16 +131,44 @@ To auto-detect a new game, add a detector to [userscript/dailies-companion.user.
 ## Reminders (ntfy)
 A GitHub Actions workflow in the **private data repo** reminds you at **8:30 AM and 8:30 PM Pacific**. If a game isn't done yet today, it sends a push notification through [ntfy](https://ntfy.sh). The notification lists what's left, shows any streak at risk, and has **Play** buttons. Tapping it opens the tracker. Nothing is sent once everything is done.
 
-GitHub's scheduler often runs cron jobs late, sometimes by hours. So the workflow checks every 15 minutes around each window, and the script sends **at most one reminder per window**: the first check after 8:30 AM (until 3 PM) and after 8:30 PM (until midnight). It knows a reminder already went out by looking at the ntfy topic's recent messages, so nothing has to be saved anywhere. That's about 40 short runs a day, roughly 1,200 of the 2,000 free Actions minutes a month for private repos.
+**Why an external trigger:** GitHub's built-in cron is too unreliable for timed reminders. In practice the runs came hours late, about twice a day. Runs started on demand (`workflow_dispatch`) begin within a minute, so a free external scheduler starts the workflow at 8:30 with `slot=morning` or `slot=evening`. The script sends **at most one reminder per window** (it checks the ntfy topic's recent messages), so duplicate triggers and the leftover GitHub cron backup are harmless.
 
 Setup:
 1. Pick a hard-to-guess topic name, e.g. `dailies-<random letters>`. Anyone who knows it can read and post to it, so treat it like a password.
 2. Install the **ntfy** app (App Store) on your iPhone/iPad, tap **＋**, and subscribe to that topic on `ntfy.sh`. Allow notifications.
 3. In the data repo: **Settings → Secrets and variables → Actions → New repository secret**, name `NTFY_TOPIC`, value = your topic.
 4. Copy [reminders/reminders.yml](reminders/reminders.yml) to `.github/workflows/reminders.yml` in the data repo.
-5. Test it: data repo → **Actions → Daily reminders → Run workflow**. With "test" ticked, it always sends.
+5. Test it: data repo → **Actions → Daily reminders → Run workflow**, tick **test**. It always sends.
+6. Set up the 8:30 trigger (below).
 
-To change the times, edit `SLOTS` in [reminders/remind.js](reminders/remind.js) and make sure the workflow's UTC `cron` hours cover the new windows in both standard and daylight time. To change the time zone, edit `REMINDER_TZ` in the workflow (and the cron hours to match).
+### The 8:30 trigger
+**Token:** create a second fine-grained token (GitHub → Settings → Developer settings → Fine-grained tokens): **Only select repositories → `dailies-data`**, permission **Actions: Read and write**, nothing else. It can only start workflows; it can't read or change your data.
+
+**Option A: [cron-job.org](https://cron-job.org) (free, recommended, works even if your phone is off).** Create two cron jobs:
+
+| Field | Morning job | Evening job |
+|---|---|---|
+| URL | `https://api.github.com/repos/Sid-V/dailies-data/actions/workflows/reminders.yml/dispatches` | same |
+| Schedule | every day at **08:30** | every day at **20:30** |
+| Time zone (Advanced) | `America/Los_Angeles` | same |
+| Request method (Advanced) | **POST** | POST |
+| Headers (Advanced) | `Authorization: Bearer <token>`<br>`Accept: application/vnd.github+json`<br>`Content-Type: application/json` | same |
+| Request body | `{"ref":"main","inputs":{"slot":"morning"}}` | `{"ref":"main","inputs":{"slot":"evening"}}` |
+
+Use **Test run** in cron-job.org. A `204` response means GitHub accepted it, and a run appears under the data repo's **Actions** tab.
+
+**Option B: iOS Shortcuts (no new account, but runs on your phone).** Shortcuts → **Automation → ＋ → Time of Day 8:30 AM, Daily → Run Immediately**. Add the action **Get Contents of URL** with the same URL, Method **POST**, the three headers, and a JSON request body `ref` = `main`, `inputs` = dictionary with `slot` = `morning`. Repeat for 8:30 PM with `evening`.
+
+To change the times, change the trigger times and `SLOTS` in [reminders/remind.js](reminders/remind.js). To change the time zone, edit `REMINDER_TZ` in the workflow and the trigger's time zone.
+
+### If reminders don't arrive
+1. **Did a run happen at 8:30?** Check the data repo's **Actions** tab. No run means the trigger isn't firing: look at cron-job.org's history, or check whether the token expired.
+2. **What did the run say?** Open the run → **Send reminder** step:
+   - `Sent (morning): …`: it was sent, so check the phone side (next step).
+   - `Nothing to remind about`: everything was already done.
+   - `already sent`: a duplicate trigger (fine).
+   - `Outside reminder windows`: the run started at the wrong time.
+3. **Phone side:** run the workflow with **test** ticked. If that doesn't arrive, check iOS **Settings → Notifications → ntfy** (allowed, not in a Focus mode that silences it) and that the app is subscribed to exactly the same topic on `ntfy.sh`.
 
 ## Development
 ```powershell

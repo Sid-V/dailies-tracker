@@ -117,15 +117,27 @@ export async function alreadySent({ server, topic, token, since, fetchImpl = fet
     .some((m) => m.event === 'message' && m.title !== TEST_TITLE);
 }
 
+// An external trigger (cron-job.org / iOS Shortcut) names the slot explicitly. Allow it to fire a
+// little early, but never for the wrong part of the day (e.g. an evening trigger after midnight).
+const EARLY_GRACE_MIN = 15;
+
+export function resolveSlot(requested, now, tz) {
+  if (requested !== 'morning' && requested !== 'evening') return currentSlot(now, tz);
+  const { hour, minute } = localParts(now, tz);
+  const m = hour * 60 + minute;
+  const w = SLOTS[requested];
+  return m >= w.start - EARLY_GRACE_MIN && m < w.end ? requested : null;
+}
+
 export async function run(env = process.env, { now = new Date(), fetchImpl = fetch, log = console.log } = {}) {
   const topic = env.NTFY_TOPIC;
   if (!topic) throw new Error('NTFY_TOPIC is not set (add it as a repository secret).');
   const tz = env.REMINDER_TZ || 'America/Los_Angeles';
   const test = env.TEST === 'true';
-  const slot = currentSlot(now, tz);
+  const slot = resolveSlot(env.SLOT, now, tz);
   if (!test && !slot) {
     const { hour, minute } = localParts(now, tz);
-    log(`Outside reminder windows (${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${tz}).`);
+    log(`Outside reminder windows (${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${tz}${env.SLOT ? `, requested ${env.SLOT}` : ''}).`);
     return null;
   }
   let data = {};
@@ -140,7 +152,7 @@ export async function run(env = process.env, { now = new Date(), fetchImpl = fet
     return null;
   }
   const ntfy = { server: env.NTFY_SERVER || undefined, topic, token: env.NTFY_TOKEN || undefined, fetchImpl };
-  if (!test && (await alreadySent({ ...ntfy, since: slotStartEpoch(now, tz, slot) }))) {
+  if (!test && (await alreadySent({ ...ntfy, since: slotStartEpoch(now, tz, slot) - EARLY_GRACE_MIN * 60 }))) {
     log(`The ${slot} reminder was already sent today.`);
     return null;
   }

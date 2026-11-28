@@ -103,6 +103,31 @@ function fakeNtfy() {
   return { published, fetchImpl };
 }
 
+test('remind: an explicit slot from an external trigger fires on time, once, and never on the wrong day', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'remind-'));
+  try {
+    const file = join(dir, 'data.json');
+    await writeFile(file, JSON.stringify(withDefaults(emptyData())));
+    const env = { NTFY_TOPIC: 'topic', DATA_FILE: file, REMINDER_TZ: tz };
+    const log = () => {};
+    const ntfy = fakeNtfy();
+    const fire = async (slot, day, hm) => {
+      const now = pst(day, hm);
+      fakeNtfy.now = now.getTime();
+      return run({ ...env, SLOT: slot }, { now, fetchImpl: ntfy.fetchImpl, log });
+    };
+    assert.ok(await fire('morning', '2026-11-21', '08:29'), 'slightly early trigger still counts');
+    assert.equal(await fire('morning', '2026-11-21', '08:30'), null, 'duplicate trigger is deduped');
+    assert.equal(await fire('auto', '2026-11-21', '09:00'), null, 'backup cron sees it was sent');
+    assert.equal(await fire('evening', '2026-11-22', '00:10'), null, 'late evening trigger skips the next day');
+    assert.equal(await fire('evening', '2026-11-21', '18:00'), null, 'too early for evening');
+    assert.ok(await fire('evening', '2026-11-21', '20:30'));
+    assert.deepEqual(ntfy.published.map((p) => p.title), ["Today's dailies (2)", 'Still to play: Catfishing, Farflung']);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('remind: polling every 15 min sends exactly one reminder per window', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'remind-'));
   try {

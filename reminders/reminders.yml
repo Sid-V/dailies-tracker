@@ -1,25 +1,31 @@
 # Copy this file to .github/workflows/reminders.yml in your PRIVATE data repo (e.g. dailies-data).
 # Required secret in that repo: NTFY_TOPIC (your secret ntfy topic name). Optional: NTFY_TOKEN.
 #
-# GitHub's scheduler often runs cron jobs late (sometimes by hours), so instead of two exact
-# times this polls every 15 minutes around each window. remind.js sends at most one reminder per
-# window: the first run after 8:30 AM and after 8:30 PM (REMINDER_TZ), and only if a game is left.
-# Crons are in UTC and cover both PST and PDT:
-#   morning 15:00-19:59 UTC = 7:00-11:59 PST / 8:00-12:59 PDT
-#   evening 03:00-07:59 UTC = 7:00-11:59 PM PST / 8:00 PM-12:59 AM PDT
-# That's ~40 short runs a day (~1,200 Actions minutes/month, within the free 2,000 for private repos).
+# GitHub's own cron scheduler is far too unreliable for timed reminders (runs land hours late or
+# are dropped). The real trigger is an external scheduler (cron-job.org, or an iOS Shortcuts
+# automation) calling this workflow's workflow_dispatch API at 8:30 AM and 8:30 PM with
+# slot=morning / slot=evening. Dispatched runs start within about a minute.
+#
+# remind.js sends at most one reminder per window and only if something is left, so the
+# backup cron below and any duplicate triggers are harmless.
 name: Daily reminders
 
 on:
-  schedule:
-    - cron: '*/15 15-19 * * *'
-    - cron: '*/15 3-7 * * *'
   workflow_dispatch:
     inputs:
+      slot:
+        description: Which reminder to send (auto = based on the current time)
+        type: choice
+        options: [auto, morning, evening]
+        default: auto
       test:
         description: Send a test notification even if everything is done
         type: boolean
-        default: true
+        default: false
+  schedule:
+    # Best-effort backup only (UTC; covers both PST and PDT).
+    - cron: '*/15 15-19 * * *'
+    - cron: '*/15 3-7 * * *'
 
 permissions:
   contents: read
@@ -52,4 +58,5 @@ jobs:
           NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
           REMINDER_TZ: America/Los_Angeles
           TRACKER_URL: https://sid-v.github.io/dailies-tracker/
+          SLOT: ${{ inputs.slot }}
           TEST: ${{ inputs.test }}
